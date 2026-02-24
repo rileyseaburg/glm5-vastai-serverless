@@ -1,16 +1,21 @@
 #!/bin/bash
-set -e
 
-# Log everything to a file we can inspect
-exec > >(tee -a /var/log/onstart.log) 2>&1
+# Pipe all output to a log file in a directory that survives container restarts
+mkdir -p /workspace/logs
+LOGFILE="/workspace/logs/onstart_$(date +%s).log"
+exec > >(tee -a $LOGFILE) 2>&1
 
-echo "Starting setup at $(date)"
+echo "=== Starting GLM-5 Setup ==="
+echo "Date: $(date)"
+echo "Python version: $(python3 --version)"
+echo "Pip version: $(pip --version)"
 
 # Install dependencies
 echo "Installing dependencies..."
-pip install --upgrade transformers vastai
+pip install --upgrade transformers vastai > /dev/null
+pip show vllm transformers
 
-# Start vLLM in the background
+# Start vLLM and capture its exit code
 echo "Starting vLLM..."
 vllm serve zai-org/GLM-5-FP8 \
     --tensor-parallel-size 8 \
@@ -23,10 +28,13 @@ vllm serve zai-org/GLM-5-FP8 \
     --port 18000 \
     --trust-remote-code \
     --max-model-len 32768 \
-    --enable-prefix-caching &
+    --enable-prefix-caching
 
-VLLM_PID=$!
-echo "vLLM started with PID $VLLM_PID"
+EXIT_CODE=$?
+echo "vLLM exited with code $EXIT_CODE"
 
-# Keep script running so container doesn't exit
-wait $VLLM_PID
+# If it fails, keep the container alive for 1 hour so we can SSH in and debug
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "vLLM failed! Keeping container alive for debugging..."
+    sleep 3600
+fi
