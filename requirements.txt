@@ -1,0 +1,3 @@
+# GLM-5 PyWorker dependencies
+# vastai SDK is provided by the serverless runtime
+# vLLM is started by the template start-server script
