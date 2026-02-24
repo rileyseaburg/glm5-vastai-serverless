@@ -21,5 +21,4 @@ vllm serve zai-org/GLM-5-FP8 \
     --port 18000 \
     --trust-remote-code \
     --max-model-len 32768 \
-    --enable-prefix-caching \
-    --download-dir /workspace/hf_cache
+    --enable-prefix-caching
