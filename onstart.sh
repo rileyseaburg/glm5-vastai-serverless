@@ -1,15 +1,20 @@
 #!/bin/bash
 set -e
 
-# Install vastai SDK for PyWorker
-pip install vastai
+# Log everything to a file we can inspect
+exec > >(tee -a /var/log/onstart.log) 2>&1
 
-# Launch vLLM server exposed to 0.0.0.0 so we can hit it directly via the mapped port
+echo "Starting setup at $(date)"
+
+# Install dependencies
+echo "Installing dependencies..."
+pip install --upgrade transformers vastai
+
+# Start vLLM in the background
+echo "Starting vLLM..."
 vllm serve zai-org/GLM-5-FP8 \
     --tensor-parallel-size 8 \
     --gpu-memory-utilization 0.85 \
-    --speculative-config.method mtp \
-    --speculative-config.num_speculative_tokens 1 \
     --tool-call-parser glm47 \
     --reasoning-parser glm45 \
     --enable-auto-tool-choice \
@@ -18,5 +23,10 @@ vllm serve zai-org/GLM-5-FP8 \
     --port 18000 \
     --trust-remote-code \
     --max-model-len 32768 \
-    --enable-prefix-caching \
-    --download-dir /workspace/hf_cache
+    --enable-prefix-caching &
+
+VLLM_PID=$!
+echo "vLLM started with PID $VLLM_PID"
+
+# Keep script running so container doesn't exit
+wait $VLLM_PID
