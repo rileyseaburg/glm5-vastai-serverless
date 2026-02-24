@@ -1,40 +1,51 @@
 #!/bin/bash
+set -e
 
-# Pipe all output to a log file in a directory that survives container restarts
-mkdir -p /workspace/logs
-LOGFILE="/workspace/logs/onstart_$(date +%s).log"
-exec > >(tee -a $LOGFILE) 2>&1
+# Install vastai SDK for PyWorker
+pip install vastai
 
-echo "=== Starting GLM-5 Setup ==="
-echo "Date: $(date)"
-echo "Python version: $(python3 --version)"
-echo "Pip version: $(pip --version)"
+# Get model name from env, default to GLM-5 if not set
+MODEL=${MODEL_NAME:-"glm-5-fp8"}
 
-# Install dependencies
-echo "Installing dependencies..."
-pip install --upgrade transformers vastai > /dev/null
-pip show vllm transformers
-
-# Start vLLM and capture its exit code
-echo "Starting vLLM..."
-vllm serve zai-org/GLM-5-FP8 \
-    --tensor-parallel-size 8 \
-    --gpu-memory-utilization 0.85 \
-    --tool-call-parser glm47 \
-    --reasoning-parser glm45 \
-    --enable-auto-tool-choice \
-    --served-model-name glm-5-fp8 \
-    --host 0.0.0.0 \
-    --port 18000 \
-    --trust-remote-code \
-    --max-model-len 32768 \
-    --enable-prefix-caching
-
-EXIT_CODE=$?
-echo "vLLM exited with code $EXIT_CODE"
-
-# If it fails, keep the container alive for 1 hour so we can SSH in and debug
-if [ $EXIT_CODE -ne 0 ]; then
-    echo "vLLM failed! Keeping container alive for debugging..."
-    sleep 3600
+if [[ "$MODEL" == "Qwen3.5-35B-A3B" ]]; then
+    echo "Starting Qwen 35B..."
+    vllm serve Qwen/Qwen3.5-35B-A3B \
+        --tensor-parallel-size 1 \
+        --gpu-memory-utilization 0.90 \
+        --trust-remote-code \
+        --host 127.0.0.1 \
+        --port 18000 \
+        --download-dir /workspace/hf_cache \
+        --enable-auto-tool-choice \
+        --tool-call-parser qwen3_coder \
+        --reasoning-parser qwen3
+elif [[ "$MODEL" == "Qwen3.5-122B-A10B" ]]; then
+    echo "Starting Qwen 122B..."
+    vllm serve Qwen/Qwen3.5-122B-A10B \
+        --tensor-parallel-size 4 \
+        --gpu-memory-utilization 0.90 \
+        --trust-remote-code \
+        --host 127.0.0.1 \
+        --port 18000 \
+        --download-dir /workspace/hf_cache \
+        --enable-auto-tool-choice \
+        --tool-call-parser qwen3_coder \
+        --reasoning-parser qwen3
+else
+    echo "Starting GLM-5..."
+    vllm serve zai-org/GLM-5-FP8 \
+        --tensor-parallel-size 8 \
+        --gpu-memory-utilization 0.85 \
+        --speculative-config.method mtp \
+        --speculative-config.num_speculative_tokens 1 \
+        --tool-call-parser glm47 \
+        --reasoning-parser glm45 \
+        --enable-auto-tool-choice \
+        --served-model-name glm-5-fp8 \
+        --host 127.0.0.1 \
+        --port 18000 \
+        --trust-remote-code \
+        --max-model-len 32768 \
+        --enable-prefix-caching \
+        --download-dir /workspace/hf_cache
 fi
