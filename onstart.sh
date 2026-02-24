@@ -4,6 +4,9 @@ set -e
 # Install vastai SDK for PyWorker
 pip install vastai
 
+# GLM-5 requires the latest transformers
+pip install --upgrade transformers
+
 # Launch vLLM server
 vllm serve zai-org/GLM-5-FP8 \
     --tensor-parallel-size 8 \
@@ -18,4 +21,5 @@ vllm serve zai-org/GLM-5-FP8 \
     --port 18000 \
     --trust-remote-code \
     --max-model-len 32768 \
-    --enable-prefix-caching
+    --enable-prefix-caching \
+    --download-dir /workspace/hf_cache
